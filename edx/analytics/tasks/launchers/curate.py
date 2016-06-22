@@ -143,16 +143,25 @@ def compare_curated_files(events_by_file_and_date):
     For each curated output file, output the dates on which it was generated,
     as well as the number of events in that version of the file.
     """
+    files_to_check = []
     for filename in sorted(events_by_file_and_date.keys()):
-        print("Filename: " + filename)
+        # First determine if the number of events is constant.
         events_by_date = events_by_file_and_date[filename]
-        prev_events = None
-        for date in sorted(events_by_date.keys()):
+        dates = sorted(events_by_date.keys())
+        event_count = [len(events_by_date[date]) for date in dates]
+        average = sum(event_count) / len(dates)
+        variance = sum([(count - average) * (count - average) for count in event_count])
+        print("ENTRY\t{}\t{}\t{}\t{}\t{}\t{}".format(filename, len(dates), dates[0], dates[-1], average, variance))
+        if variance > 0:
+            files_to_check.append(filename)
+
+    # Go through the files for which we need further details.
+    for filename in files_to_check:
+        events_by_date = events_by_file_and_date[filename]
+        dates = sorted(events_by_date.keys())
+        print("Filename: " + filename)
+        for date in dates:
             events = events_by_date[date]
-            if prev_events and len(prev_events) == len(events):
-                # TODO: Compare current events with previous day's events.
-                pass
-            prev_events = events
             print("   {}: {} ".format(date, len(events)))
 
 
