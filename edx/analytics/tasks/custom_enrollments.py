@@ -11,6 +11,7 @@ from edx.analytics.tasks.enrollments import CourseEnrollmentTask, DaysEnrolledFo
 from edx.analytics.tasks.util import eventlog
 from edx.analytics.tasks.util.hive import HiveTableTask, HivePartition, HiveQueryToMysqlTask
 from edx.analytics.tasks.decorators import workflow_entry_point
+from edx.analytics.tasks.util.overwrite import OverwriteOutputMixin
 
 log = logging.getLogger(__name__)
 
@@ -156,7 +157,7 @@ class EnrollmentDailyTask(EnrollmentTask):
 
 
 @workflow_entry_point
-class CustomEnrollmentTaskWorkflow(CourseEnrollmentTableDownstreamMixin, luigi.WrapperTask):
+class CustomEnrollmentTaskWorkflow(CourseEnrollmentTableDownstreamMixin, OverwriteOutputMixin, luigi.WrapperTask):
     """Import all breakdowns of enrollment into MySQL"""
 
     def requires(self):
@@ -166,6 +167,7 @@ class CustomEnrollmentTaskWorkflow(CourseEnrollmentTableDownstreamMixin, luigi.W
             'interval': self.interval,
             'pattern': self.pattern,
             'warehouse_path': self.warehouse_path,
+            'overwrite': self.overwrite
         }
         yield (
             EnrollmentDailyTask(**kwargs),

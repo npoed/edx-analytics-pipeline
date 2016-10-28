@@ -13,11 +13,12 @@ from edx.analytics.tasks.url import get_target_from_url, url_path_join
 import datetime
 
 from edx.analytics.tasks.util.hive import WarehouseMixin, HiveTableTask, HivePartition, HiveQueryToMysqlTask
+from edx.analytics.tasks.util.overwrite import OverwriteOutputMixin
 
 log = logging.getLogger(__name__)
 
 
-class HiveTableDownstreamMixin(WarehouseMixin, EventLogSelectionDownstreamMixin, MapReduceJobTaskMixin):
+class HiveTableDownstreamMixin(WarehouseMixin, EventLogSelectionDownstreamMixin, MapReduceJobTaskMixin, OverwriteOutputMixin):
     # Make the interval be optional:
     interval = luigi.DateIntervalParameter(
         default=None,
@@ -602,11 +603,12 @@ class ActivityWorkflow(
             'source': self.source,
             'interval': self.interval,
             'pattern': self.pattern,
-            'warehouse_path': self.warehouse_path
+            'warehouse_path': self.warehouse_path,
+            'overwrite': self.overwrite
         }
         yield (
-            # ActivityDaily(**kwargs),
-            # InvolvementDaily(**kwargs),
-            # AnswerDaily(**kwargs),
+            ActivityDaily(**kwargs),
+            InvolvementDaily(**kwargs),
+            AnswerDaily(**kwargs),
             OpenAssessmentToSQLTaskWorkflow(**kwargs)
         )

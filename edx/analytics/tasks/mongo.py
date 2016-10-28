@@ -406,11 +406,12 @@ class CourseStructureToSQLTaskWorkflow(HiveQueryToMysqlTask):
 
 
 @workflow_entry_point
-class MongoImportTaskWorkflow(WarehouseMixin, luigi.WrapperTask):
+class MongoImportTaskWorkflow(WarehouseMixin, OverwriteOutputMixin, luigi.WrapperTask):
 
     def requires(self):
         kwargs = {
-            'warehouse_path': self.warehouse_path
+            'warehouse_path': self.warehouse_path,
+            'overwrite': self.overwrite
         }
         yield (
             CourseStructureToSQLTaskWorkflow(**kwargs),
