@@ -122,7 +122,7 @@ class EdxApiClient(object):
                 }
             )
             data = response.json()
-            self._session.auth = SuppliedAuth(data['access_token'], self.token_type)
+            self._session.auth = SuppliedAuth(data['access_token'], data.get('token_type', self.token_type))
             self._expires_at = now + timedelta(seconds=data['expires_in'])
             log.info('Acquired a token that expires at %s', self._expires_at.isoformat())
 
