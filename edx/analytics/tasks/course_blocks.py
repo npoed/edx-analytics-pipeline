@@ -32,7 +32,8 @@ class CourseBlockRecord(Record):
     course_id = StringField(length=255, nullable=False, description='Identifier for the course containing the block.')
     block_type = StringField(length=255, nullable=False,
                              description='Block type, e.g. `video`, `chapter`, `problem`, `vectordraw`.')
-    display_name = StringField(length=255, nullable=False, description='User-facing title of the block.')
+    display_name = StringField(length=255, nullable=False, truncate=True,
+                               description='User-facing title of the block. Will be truncated to 255 characters.')
     is_root = BooleanField(default=False, nullable=False,
                            description='True if the block is the course\'s root node.')
     is_orphan = BooleanField(default=False, nullable=False,
