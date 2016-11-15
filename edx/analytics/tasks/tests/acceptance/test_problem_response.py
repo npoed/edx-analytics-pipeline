@@ -72,7 +72,7 @@ class ProblemResponseReportWorkflowAcceptanceTest(AcceptanceTestCase):
         """Ensure hive partition was created."""
         hourly_partition = self.DATE.strftime(self.HOURLY_PARTITION_FORMAT)
         hive_partition = url_path_join(self.warehouse_path, "problem_response_location",
-                                       "dt=" + hourly_partition, '000000_0')
+                                       "dt=" + hourly_partition)
         partition_target = get_target_for_local_server(hive_partition)
         self.assertTrue(partition_target.exists())
 
