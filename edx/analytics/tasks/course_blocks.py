@@ -28,7 +28,7 @@ class CourseBlockRecord(Record):
     Represents a course block as fetched from the edX Course Blocks REST API, augmented with details about its
     position in the course.
     """
-    block_id = StringField(length=255, nullable=False, description='Block identifier.')
+    block_id = StringField(length=564, nullable=False, description='Block identifier.')
     course_id = StringField(length=255, nullable=False, description='Identifier for the course containing the block.')
     block_type = StringField(length=255, nullable=False,
                              description='Block type, e.g. `video`, `chapter`, `problem`, `vectordraw`.')
