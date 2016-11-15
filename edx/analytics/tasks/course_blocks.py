@@ -39,14 +39,14 @@ class CourseBlockRecord(Record):
     is_orphan = BooleanField(default=False, nullable=False,
                              description='True if the block has no parent nodes, but is not a root node.')
     is_dag = BooleanField(default=False, nullable=False,
-                          description='True if the block has more than one parent, making the course '
-                                      'a Directed Acyclic Graph.  If True, then parent_block_id is null.')
+                          description='True if the block has more than one parent, making the course a Directed '
+                                      'Acyclic Graph.  If True, parent_block_id, course_path, and sort_idx will be set '
+                                      'to the first place the block is found when traversing the course blocks tree.')
     parent_block_id = StringField(length=255, nullable=True,
-                                  description='Block identifier for the block\'s parent, iff only one is found.')
+                                  description='Block identifier for the block\'s parent.')
     course_path = StringField(nullable=True,
                               description='Concatenated string of parent block display_name values, from '
-                                          'the root node to the parent_block_id.  See `CourseBlocksApiDataTask` for '
-                                          'details on how this value is set for different types of blocks.')
+                                          'the root node to the parent_block_id.')
     sort_idx = IntegerField(nullable=True,
                             description='Number indicating the position that this block holds in a course-outline '
                                         'sorted list of blocks. See `CourseBlocksApiDataTask.sort_orphan_blocks_up`.')
