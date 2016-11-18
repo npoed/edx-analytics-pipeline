@@ -27,11 +27,13 @@ class CourseRecord(Record):
     Represents a single course's details as fetched from the edX Courses REST API.
     """
     course_id = StringField(nullable=False, length=255, description='Course identifier.')
-    name = StringField(nullable=False, length=255, description='Course name.')
+    name = StringField(nullable=False, length=255, truncate=True,
+                       description='Course name, truncated to 255 characters.')
     org = StringField(nullable=False, length=255, description='Course organization.')
     number = StringField(nullable=False, length=255, description='Course number.')
     blocks_url = StringField(nullable=False, description='URL of the course\'s blocks')
-    short_description = StringField(nullable=True, length=255, description='Short course description.')
+    short_description = StringField(nullable=True, length=255, truncate=True,
+                                    description='Short course description, truncated to 255 characters.')
     enrollment_start = DateTimeField(nullable=True, description='Enrollment start date.')
     enrollment_end = DateTimeField(nullable=True, description='Enrollment end date.')
     start_date = DateTimeField(nullable=True, description='Course start date.')
@@ -39,7 +41,8 @@ class CourseRecord(Record):
     start_display = StringField(nullable=True, length=255, description='Course start date description.')
     start_type = StringField(nullable=True, length=255, description='Indicates how start_display was set, '
                                                                     'e.g. "string", "timestamp", "empty".')
-    effort = StringField(nullable=True, length=255, description='Description of effort required.')
+    effort = StringField(nullable=True, length=255, truncate=True,
+                         description='Description of effort required, truncated to 255 characters.')
     pacing = StringField(nullable=True, length=255, description='Description of course pacing strategy.')
 
 
