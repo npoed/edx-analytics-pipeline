@@ -377,12 +377,8 @@ class LatestProblemResponseDataTask(EventLogSelectionMixin,
         super(LatestProblemResponseDataTask, self).run()
 
 
-class ProblemResponsePartitionTask(ProblemResponseTableMixin, HivePartitionTask):
-    """An abstract partition task for ProblemResponse hive data."""
-
-    # Implement in subclass
-    hive_table_task = None
-    data_task = None
+class LatestProblemResponsePartitionTask(ProblemResponseTableMixin, HivePartitionTask):
+    """The hive partition for the LatestProblemResponse table and data tasks."""
 
     @property
     def output_root(self):
@@ -394,10 +390,6 @@ class ProblemResponsePartitionTask(ProblemResponseTableMixin, HivePartitionTask)
         The task is complete if the output_root/_SUCCESS file is present.
         """
         return get_target_from_url(url_path_join(self.output_root, '_SUCCESS')).exists()
-
-
-class LatestProblemResponsePartitionTask(ProblemResponsePartitionTask):
-    """The hive partition for the LatestProblemResponse table and data tasks."""
 
     @property
     def hive_table_task(self):
@@ -428,7 +420,7 @@ class ProblemResponseLocationTableTask(ProblemResponseTableTask):
         return 'problem_response_location'
 
 
-class ProblemResponseLocationPartitionTask(ProblemResponsePartitionTask):
+class ProblemResponseLocationPartitionTask(ProblemResponseTableMixin, HivePartitionTask):
     """
     Joins the given ProblemResponse data with Course Blocks location data into a new partition.
 
@@ -500,6 +492,17 @@ class ProblemResponseLocationPartitionTask(ProblemResponsePartitionTask):
         query = textwrap.dedent(query)
         log.debug('query: %s', query)
         return query
+
+    @property
+    def output_root(self):
+        """Expose the partition location path as the output root."""
+        return self.partition_location
+
+    def complete(self):
+        """
+        The task is complete if the output_root is present.
+        """
+        return get_target_from_url(self.output_root).exists()
 
     @property
     def hive_table_task(self):
