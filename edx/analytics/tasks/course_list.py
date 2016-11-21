@@ -245,10 +245,6 @@ class CourseListTableTask(BareHiveTableTask):
 class CourseListPartitionTask(CourseListDownstreamMixin, MapReduceJobTaskMixin, HivePartitionTask):
     """A single hive partition of course data."""
 
-    # Write the output directly to the final destination and rely on the partition_location dir to
-    # indicate whether or not it is complete. Note that this is a custom extension to luigi.
-    enable_direct_output = True
-
     @property
     def hive_table_task(self):
         return CourseListTableTask(

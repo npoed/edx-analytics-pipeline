@@ -351,10 +351,6 @@ class CourseBlocksPartitionTask(CourseBlocksDownstreamMixin, MapReduceJobTaskMix
     A single hive partition of course block data, for all courses returned by CourseListApiDataTask.
     """
 
-    # Write the output directly to the final destination and rely on the partition_location dir to
-    # indicate whether or not it is complete. Note that this is a custom extension to luigi.
-    enable_direct_output = True
-
     def __init__(self, *args, **kwargs):
         super(CourseBlocksPartitionTask, self).__init__(*args, **kwargs)
 

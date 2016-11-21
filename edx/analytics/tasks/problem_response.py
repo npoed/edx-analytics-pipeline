@@ -384,10 +384,6 @@ class ProblemResponsePartitionTask(ProblemResponseTableMixin, HivePartitionTask)
     hive_table_task = None
     data_task = None
 
-    # Write the output directly to the final destination and rely on the partition_location dir to
-    # indicate whether or not it is complete. Note that this is a custom extension to luigi.
-    enable_direct_output = True
-
     @property
     def output_root(self):
         """Expose the partition location path as the output root."""
