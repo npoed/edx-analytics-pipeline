@@ -476,7 +476,7 @@ class ProblemResponseLocationPartitionTask(ProblemResponsePartitionTask):
                 pr.first_attempt_date,
                 pr.last_attempt_date,
                 CONCAT(COALESCE(cb.course_path, '{deleted_blocks_path}'), '{path_delimiter}', pr.problem) as location,
-                COALESCE(cb.sort_idx, 0) as sort_idx
+                COALESCE(cb.sort_idx, -1) as sort_idx
             FROM {problem_response_table} pr
             LEFT OUTER JOIN {course_blocks_table} cb
                 ON (cb.block_id=pr.problem_id and cb.{course_blocks_partition})
