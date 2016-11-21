@@ -32,7 +32,7 @@ class CourseBlockRecord(Record):
     course_id = StringField(length=255, nullable=False, description='Identifier for the course containing the block.')
     block_type = StringField(length=255, nullable=False,
                              description='Block type, e.g. `video`, `chapter`, `problem`, `vectordraw`.')
-    display_name = StringField(length=255, nullable=False, truncate=True,
+    display_name = StringField(length=255, nullable=False, truncate=True, normalize_whitespace=True,
                                description='User-facing title of the block. Will be truncated to 255 characters.')
     is_root = BooleanField(default=False, nullable=False,
                            description='True if the block is the course\'s root node.')
@@ -44,7 +44,7 @@ class CourseBlockRecord(Record):
                                       'to the first place the block is found when traversing the course blocks tree.')
     parent_block_id = StringField(length=255, nullable=True,
                                   description='Block identifier for the block\'s parent.')
-    course_path = StringField(nullable=True,
+    course_path = StringField(nullable=True, normalize_whitespace=True,
                               description='Concatenated string of parent block display_name values, from '
                                           'the root node to the parent_block_id.')
     sort_idx = IntegerField(nullable=True,
