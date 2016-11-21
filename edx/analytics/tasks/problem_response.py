@@ -526,8 +526,8 @@ class ProblemResponseReportTask(ProblemResponseDataMixin,
 
     ProblemResponseRecords are mapped by course_id, and each course is written to a separate file.
     """
-    input_task = luigi.Parameter(
-        description='ProblemResponsePartitionTask instance containing the data to put in the generated reports.'
+    input_root = luigi.Parameter(
+        description='URL pointing to the problem response partition data to put in the generated reports.',
     )
     report_filename_template = luigi.Parameter(
         config_path={'section': 'problem-response', 'name': 'report_filename_template'},
@@ -577,7 +577,7 @@ class ProblemResponseReportTask(ProblemResponseDataMixin,
     def input_hadoop(self):
         # NOTE: The hadoop job needs the raw data to use as input, not the hive partition metadata, which is the output
         # of the partition task
-        return get_target_from_url(self.input_task.output_root)
+        return get_target_from_url(self.input_root)
 
     def output(self):
         """
@@ -722,10 +722,9 @@ class ProblemResponseReportWorkflow(ProblemResponseTableMixin,
             **kwargs
         )
 
-        # Initialize report task
-        # NB: its input_task is the problem_response_location_task
+        # Initialize report task, feeding in the problem response location task's output as input.
         report_task = ProblemResponseReportTask(
-            input_task=problem_response_location_task,
+            input_root=problem_response_location_task.output_root,
             output_root=self.output_root,
             marker=self.marker,
             **kwargs
