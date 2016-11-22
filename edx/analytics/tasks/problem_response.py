@@ -431,13 +431,6 @@ class ProblemResponseLocationPartitionTask(ProblemResponseTableMixin, HivePartit
     The resulting records are sorted by course_id, course_blocks.sort_idx, and first_attempt_date, and
     partitioned by formatted date.
     """
-    problem_response_partition = luigi.Parameter(
-        description='ProblemResponsePartitionTask instance which contains this partition\'s problem response data.',
-    )
-    course_blocks_partition = luigi.Parameter(
-        description='CourseBlocksPartitionTask instance to query to determine this partition\'s problem response '
-                    'location and sort order.'
-    )
     path_delimiter = luigi.Parameter(
         config_path={'section': 'course-blocks', 'name': 'path_delimiter'},
         default=' / ',
@@ -493,6 +486,37 @@ class ProblemResponseLocationPartitionTask(ProblemResponseTableMixin, HivePartit
         log.debug('query: %s', query)
         return query
 
+    def __init__(self, *args, **kwargs):
+        """ Initialize the course list and course blocks data input tasks """
+        super(ProblemResponseLocationPartitionTask, self).__init__(*args, **kwargs)
+
+        kwargs = dict(
+            mapreduce_engine=self.mapreduce_engine,
+            lib_jar=self.lib_jar,
+            n_reduce_tasks=self.n_reduce_tasks,
+            remote_log_level=self.remote_log_level,
+            input_format=self.input_format,
+        )
+        self.course_list_partition = CourseListPartitionTask(
+            date=self.date,
+            **kwargs
+        )
+        self.course_blocks_partition = CourseBlocksPartitionTask(
+            input_root=self.course_list_partition.output_root,
+            date=self.date,
+            **kwargs
+        )
+        self.problem_response_partition = LatestProblemResponsePartitionTask(
+            interval=self.interval,
+            interval_start=self.interval_start,
+            interval_end=self.interval_end,
+            date=self.date,
+            source=self.source,
+            pattern=self.pattern,
+            overwrite=self.overwrite,
+            **kwargs
+        )
+
     @property
     def output_root(self):
         """Expose the partition location path as the output root."""
@@ -516,6 +540,7 @@ class ProblemResponseLocationPartitionTask(ProblemResponseTableMixin, HivePartit
         Ensures that the tables and data required exist before query() is run.
         """
         return (
+            self.course_list_partition,
             self.course_blocks_partition,
             self.problem_response_partition,
             self.hive_table_task,
@@ -523,15 +548,14 @@ class ProblemResponseLocationPartitionTask(ProblemResponseTableMixin, HivePartit
 
 
 class ProblemResponseReportTask(ProblemResponseDataMixin,
+                                ProblemResponseTableMixin,
+                                OverwriteOutputMixin,
                                 MultiOutputMapReduceJobTask):
     """
     Task which generates one report per course from the input problem response records.
 
     ProblemResponseRecords are mapped by course_id, and each course is written to a separate file.
     """
-    input_root = luigi.Parameter(
-        description='URL pointing to the problem response partition data to put in the generated reports.',
-    )
     report_filename_template = luigi.Parameter(
         config_path={'section': 'problem-response', 'name': 'report_filename_template'},
         default='{course_id}_problem_response.csv',
@@ -577,10 +601,24 @@ class ProblemResponseReportTask(ProblemResponseDataMixin,
         if self.report_field_list_delimiter is not None:
             self.report_field_list_delimiter = ast.literal_eval(self.report_field_list_delimiter)
 
+    def requires(self):
+        """
+        Use the raw data from the problem response location partition as input
+        """
+        return ProblemResponseLocationPartitionTask(
+            date=self.date,
+            overwrite=self.overwrite,
+            mapreduce_engine=self.mapreduce_engine,
+            lib_jar=self.lib_jar,
+            n_reduce_tasks=self.n_reduce_tasks,
+            remote_log_level=self.remote_log_level,
+            input_format=self.input_format,
+        )
+
     def input_hadoop(self):
         # NOTE: The hadoop job needs the raw data to use as input, not the hive partition metadata, which is the output
         # of the partition task
-        return get_target_from_url(self.input_root)
+        return get_target_from_url(self.requires().output_root)
 
     def output(self):
         """
@@ -600,6 +638,14 @@ class ProblemResponseReportTask(ProblemResponseDataMixin,
             filename = self.report_filename_template.format(course_id=safe_course_id)
             return url_path_join(self.output_root, filename)
         return None
+
+    def run(self):
+        """
+        Clear out output if overwrite requested.
+        """
+        self.remove_output_on_overwrite()
+
+        super(ProblemResponseReportTask, self).run()
 
     def mapper(self, line):
         """
@@ -671,71 +717,32 @@ class ProblemResponseReportWorkflow(ProblemResponseTableMixin,
         description='URL directory where a marker file will be written on task completion.'
                     ' Note that the report task will not run if this marker file exists.',
     )
-    hive_overwrite = luigi.BooleanParameter(
+    overwrite = luigi.BooleanParameter(
         default=False,
-        description='Whether or not to rebuild hive data from tracking logs.'
+        description='Set to True to force rebuild hive data and reports from tracking logs.'
     )
 
     def requires(self):
         """
-        Initialize and yield the tasks in this workflow.
+        Initialize the problem response report task
         """
-        # Args shared by all tasks
-        kwargs = dict(
-            mapreduce_engine=self.mapreduce_engine,
-            lib_jar=self.lib_jar,
-            n_reduce_tasks=self.n_reduce_tasks,
-            remote_log_level=self.remote_log_level,
-            input_format=self.input_format,
-        )
-
-        # Initialize problem response table task
-        problem_response_task = LatestProblemResponsePartitionTask(
+        yield ProblemResponseReportTask(
+            # ProblemResponseTableMixin
+            date=self.date,
+            partition_format=self.partition_format,
             interval=self.interval,
             interval_start=self.interval_start,
             interval_end=self.interval_end,
-            date=self.date,
-            source=self.source,
-            pattern=self.pattern,
-            overwrite=self.hive_overwrite,
-            **kwargs
-        )
+            mapreduce_engine=self.mapreduce_engine,
+            input_format=self.input_format,
+            lib_jar=self.lib_jar,
+            n_reduce_tasks=self.n_reduce_tasks,
+            remote_log_level=self.remote_log_level,
 
-        # Initialize the course list partition task, partitioned on date, but do not run it;
-        #  just using it to provide the course_blocks_task's input_root.
-        course_list_task = CourseListPartitionTask(
-            date=self.date,
-            **kwargs
-        )
+            # OverwriteMixin
+            overwrite=self.overwrite,
 
-        # Initialize the all course blocks data task, feeding
-        # in the course_list_task's output as input.
-        course_blocks_task = CourseBlocksPartitionTask(
-            input_root=course_list_task.output_root,
-            date=self.date,
-            **kwargs
-        )
-
-        # Initialize problem response + course location partition task
-        problem_response_location_task = ProblemResponseLocationPartitionTask(
-            problem_response_partition=problem_response_task,
-            course_blocks_partition=course_blocks_task,
-            date=self.date,
-            overwrite=self.hive_overwrite,
-            **kwargs
-        )
-
-        # Initialize report task, feeding in the problem response location task's output as input.
-        report_task = ProblemResponseReportTask(
-            input_root=problem_response_location_task.output_root,
+            # MultiOutputMapReduceJobTask
             output_root=self.output_root,
             marker=self.marker,
-            **kwargs
-        )
-
-        yield (
-            report_task,
-            problem_response_location_task,
-            problem_response_task,
-            course_blocks_task,
         )
