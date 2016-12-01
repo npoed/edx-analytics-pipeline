@@ -3,6 +3,7 @@ Support for running a SQL script against an HP Vertica database.
 """
 from collections import namedtuple
 import json
+import datetime
 import logging
 
 import luigi
@@ -27,16 +28,20 @@ class RunSqlScriptTaskMixin(object):
     Parameters for running a SQL script against an HP Vertica database.
 
     """
+    date = luigi.DateParameter(
+        default=datetime.datetime.utcnow().date(),
+        description='Default is today, UTC.',
+    )
     schema = luigi.Parameter(
-        config_path={'section': 'vertica-export', 'name': 'schema'},
+        config_path={'section': 'run-sql-script', 'name': 'schema'},
         description='The schema to which to write.',
     )
     credentials = luigi.Parameter(
-        config_path={'section': 'vertica-export', 'name': 'credentials'},
+        config_path={'section': 'run-sql-script', 'name': 'credentials'},
         description='Path to the external access credentials file.',
     )
     read_timeout = luigi.IntParameter(
-        config_path={'section': 'vertica-export', 'name': 'read_timeout'}
+        config_path={'section': 'run-sql-script', 'name': 'read_timeout'}
     )
     source_script = luigi.Parameter(
         description='The path to the source script to execute'
@@ -47,7 +52,7 @@ class RunSqlScriptTaskMixin(object):
         'successfully'
     )
     raise_on_error = luigi.BooleanParameter(
-        default=True,
+        default=False,
         description='Whether or not we raise any exceptions that occur during execution. '
         'Not all tasks necessarily care about running to completion, and we might not want '
         'to halt the parent requiring us if we fail.'
@@ -76,8 +81,6 @@ class RunSqlScriptTask(RunSqlScriptTaskMixin, luigi.Task):
 
     def update_id(self):
         """This update id will be a unique identifier for this SQL script execution."""
-        # For MySQL tasks, we take the hash of the task id, but since Vertica does not similarly
-        # limit the size of columns, we can safely use the entire task ID.
         return str(self)
 
     def output(self):
@@ -103,10 +106,15 @@ class RunSqlScriptTask(RunSqlScriptTaskMixin, luigi.Task):
         if not self.table:
             raise Exception("table needs to be specified")
 
+        # Make sure we can connect to Vertica.
         self.check_vertica_availability()
-
         connection = self.output().connect()
+
         try:
+            # Set up our connection to point to the specified schema so that scripts can have unqualified
+            # table references and not necessarily need to know or care about where they're running.
+            connection.cursor().execute('SET SEARCH_PATH = {schema};'.format(schema=self.schema))
+
             with self.input()['source_script'].open('r') as script_file:
                 # Read in our script and execute it.
                 script_body = script_file.read()
@@ -115,7 +123,6 @@ class RunSqlScriptTask(RunSqlScriptTaskMixin, luigi.Task):
                 # If we're here, nothing blew up, so mark as complete.
                 self.output().touch(connection)
 
-                # We commit only if both operations completed successfully.
                 connection.commit()
                 log.debug("Committed transaction.")
         except Exception as exc:
