@@ -2,7 +2,6 @@
 Support for running a SQL script against an HP Vertica database.
 """
 from collections import namedtuple
-import json
 import datetime
 import logging
 
@@ -26,7 +25,6 @@ except ImportError:
 class RunSqlScriptTaskMixin(object):
     """
     Parameters for running a SQL script against an HP Vertica database.
-
     """
     date = luigi.DateParameter(
         default=datetime.datetime.utcnow().date(),
