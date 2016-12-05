@@ -5,6 +5,7 @@ from collections import namedtuple
 import yaml
 import datetime
 import logging
+from os import path
 
 import luigi
 import luigi.configuration
@@ -35,6 +36,11 @@ class RunSqlScriptsTaskMixin(object):
     )
     script_configuration = luigi.Parameter(
         description='The path to the configuration file that specifies which scripts to run'
+    )
+    script_root = luigi.Parameter(
+        default='',
+        description='The root directory from which the script locations in the configuration '
+        'are referenced from.'
     )
     marker_schema = luigi.Parameter(
         default=None,
@@ -83,7 +89,7 @@ class RunSqlScriptsTask(RunSqlScriptsTaskMixin, luigi.Task):
             # Read in our script configuration.
             config = yaml.safe_load(script_conf_file)
             for script in config['scripts']:
-                log.info("Triggering task run for {script}".format(script=script['location']))
+                log.info("Triggering task run for '{script}'...".format(script=script['location']))
 
                 # Fire off a task for each script. Make sure raise_on_error is false because
                 # we shouldn't stop the job if one subtask happens to fail.  This is hacky, because
@@ -91,7 +97,6 @@ class RunSqlScriptsTask(RunSqlScriptsTaskMixin, luigi.Task):
                 # functionality.  Alas.
                 current_task = RunSqlScriptTask(
                     credentials=self.credentials, schema=self.schema, marker_schema=self.marker_schema,
-                    date=self.date, read_timeout=self.read_timeout, source_script=script['location'],
+                    date=self.date, read_timeout=self.read_timeout, source_script=path.join(self.script_root, script['location']),
                     table=script['table'], raise_on_error=False)
-                if not current_task.output().exists():
-                  current_task.run()
+                luigi.build([current_task])
