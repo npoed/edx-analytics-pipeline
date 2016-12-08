@@ -14,6 +14,9 @@ logger = logging.getLogger('luigi-interface')
 
 
 class MongoImportTask(OverwriteOutputMixin, luigi.Task):
+    """
+    Базовый класс для импорта collection из MongoDB
+    """
     output_root = luigi.Parameter(description='URL to store the data.')
 
     @property
@@ -48,6 +51,11 @@ class MongoImportTask(OverwriteOutputMixin, luigi.Task):
 
 
 class ActiveVersionsMongoImportTask(MongoImportTask):
+    """
+    Импорт коллекции modulestore.active_versions,
+    хранящей данные об активных версиях структур курсов
+    """
+
     @property
     def collection_name(self):
         return 'modulestore.active_versions'
@@ -66,6 +74,9 @@ class ActiveVersionsMongoImportTask(MongoImportTask):
 
 
 class ActiveVersionsHiveTable(HiveTableTask):
+    """
+    Описание Hive таблицы для хранения active_versions
+    """
     @property
     def table(self):
         return 'active_versions'
@@ -95,6 +106,11 @@ class ActiveVersionsHiveTable(HiveTableTask):
 
 
 class DefinitionsGraderMongoImportTask(MongoImportTask):
+    """
+    Импорт данных о политике оценивания прохождения курса студентами
+    из коллекции modulestore.definitions
+    """
+
     @property
     def collection_name(self):
         return 'modulestore.definitions'
@@ -116,6 +132,10 @@ class DefinitionsGraderMongoImportTask(MongoImportTask):
 
 
 class DefinitionsGraderHiveTable(HiveTableTask):
+    """
+    Описание Hive таблицы для хранения данных о политике оценивания
+    прохождения курса студентами
+    """
     @property
     def table(self):
         return 'definitions_grader'
@@ -143,6 +163,10 @@ class DefinitionsGraderHiveTable(HiveTableTask):
 
 
 class DefinitionsGraderToSQLTaskWorkflow(HiveQueryToMysqlTask):
+    """
+    Выгрузка данных о политике оценивания прохождения курса студентами в базу отчетов.
+    Данные объединяются с active_versions и course_structure
+    """
     @property
     def partition(self):
         return HivePartition('dt', datetime.datetime.today().date().isoformat())  # pylint: disable=no-member
@@ -186,6 +210,10 @@ class DefinitionsGraderToSQLTaskWorkflow(HiveQueryToMysqlTask):
 
 
 class DefinitionsCutoffsMongoImportTask(MongoImportTask):
+    """
+    Импорт данных о доступных оценках за курс и их значениях в %
+    из коллекции modulestore.definitions
+    """
     @property
     def collection_name(self):
         return 'modulestore.definitions'
@@ -202,6 +230,10 @@ class DefinitionsCutoffsMongoImportTask(MongoImportTask):
 
 
 class DefinitionsCutoffsHiveTable(HiveTableTask):
+    """
+    Описание Hive таблицы для хранения доступных оценок за курс
+    """
+
     @property
     def table(self):
         return 'definitions_cutoff'
@@ -225,6 +257,11 @@ class DefinitionsCutoffsHiveTable(HiveTableTask):
 
 
 class DefinitionsCutoffToSQLTaskWorkflow(HiveQueryToMysqlTask):
+    """
+    Выгрузка доступных оценок за курс в базу отчетов.
+    Данные объединяются с active_versions и course_structure
+    """
+
     @property
     def partition(self):
         return HivePartition('dt', datetime.datetime.today().date().isoformat())  # pylint: disable=no-member
@@ -266,11 +303,20 @@ class DefinitionsCutoffToSQLTaskWorkflow(HiveQueryToMysqlTask):
 # ----------------------------------------------------------------------------------------------------------------------
 
 class CourseStructureMongoImportTask(MongoImportTask):
+    """
+    Импорт структуры курсов из коллекции modulestore.structures
+    """
     @property
     def collection_name(self):
         return 'modulestore.structures'
 
     def get_graded_parent(self, block_id, parent_dict):
+        """
+        Получение родительского блока с graded=True
+        :param block_id: id дочернего блока
+        :param parent_dict: словарь для поиска родителей
+        :return: родительский блок с graded=True или None, если такого нет
+        """
         parent = parent_dict.get(block_id)
         if parent is None:
             return None
@@ -282,6 +328,15 @@ class CourseStructureMongoImportTask(MongoImportTask):
         return self.get_graded_parent(parent_id, parent_dict)
 
     def get_block_ordering(self, root, block_dict, order_dict, order=0):
+        """
+        Нумеруем все блоки по порядку их следования в дереве
+        рекурсивно, начиная с ordered_dict[root]=order сверху вниз и слева направо
+        :param root: корневой блок, с которого начинать нумерацию
+        :param block_dict: словарь для получения блока по его id
+        :param order_dict: словарь с пронумерованными блоками
+        :param order: начальный номер
+        :return: (ordered_dict, order), где order - следующий неиспользованный номер
+        """
         fields = root['fields']
         children = fields.get('children', [])
         root_id = root['block_id']
@@ -300,7 +355,10 @@ class CourseStructureMongoImportTask(MongoImportTask):
         branch_id = str(entry["_id"])
         root_id = entry['root'][1]
         blocks = entry['blocks']
-        # fill parent dict where parent_dict[child_id] = parent
+        # для более удобной навигации составляем словарь,
+        # в котором ключ - child_id, а значение - parent блок
+        # parent_dict[child_id] = parent
+        # Кроме этого находим блок root по его id
         parent_dict = {}
         block_dict = {}
         definition_id = None
@@ -316,8 +374,9 @@ class CourseStructureMongoImportTask(MongoImportTask):
             for child in children:
                 child_type, child_id = child
                 parent_dict[child_id] = block
+        # нумеруем блоки
         order_dict, max_order = self.get_block_ordering(root, block_dict, {})
-        # get block of type "problem" with graded parent
+        # Ищем блоки типа problem, у которых есть родитель с graded=True
         for block in blocks:
             block_type = block["block_type"]
             if block_type != "problem":
@@ -337,6 +396,9 @@ class CourseStructureMongoImportTask(MongoImportTask):
 
 
 class CourseStructureHiveTable(HiveTableTask):
+    """
+    Описание Hive таблицы для хранения струтктуры курсов
+    """
     @property
     def table(self):
         return 'course_structure'
@@ -365,6 +427,11 @@ class CourseStructureHiveTable(HiveTableTask):
 
 
 class CourseStructureToSQLTaskWorkflow(HiveQueryToMysqlTask):
+    """
+    Выгрузка структуры курсов в базу отчетов.
+    Данные объединяются с active_versions,
+    чтобы выбрать только последнюю опубликованную версию структуры курса
+    """
     @property
     def partition(self):
         return HivePartition('dt', datetime.datetime.today().date().isoformat())  # pylint: disable=no-member

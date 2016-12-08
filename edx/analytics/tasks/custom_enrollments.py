@@ -17,6 +17,9 @@ log = logging.getLogger(__name__)
 
 
 class MyCourseEnrollmentTask(CourseEnrollmentTask):
+    """
+    Импорт данных о зачисленных на курсы студентах по дням из tracking.log
+    """
 
     def mapper(self, line):
         result = super(MyCourseEnrollmentTask, self).mapper(line)
@@ -40,7 +43,9 @@ class MyCourseEnrollmentTask(CourseEnrollmentTask):
 
 
 class CourseEnrollmentTableTask(CourseEnrollmentTableDownstreamMixin, HiveTableTask):
-    """Hive table that stores the set of users enrolled in each course over time."""
+    """
+    Описание Hive таблицы для хранения студентов, зачисленных на курсы по дням
+    """
 
     @property
     def table(self):
@@ -124,7 +129,9 @@ class EnrollmentTask(CourseEnrollmentTableDownstreamMixin, HiveQueryToMysqlTask)
 
 
 class EnrollmentDailyTask(EnrollmentTask):
-    """A history of the number of students enrolled in each course at the end of each day"""
+    """
+    История зачисленных студентов на каждом курсе по дням.
+    """
 
     @property
     def query(self):
@@ -158,7 +165,9 @@ class EnrollmentDailyTask(EnrollmentTask):
 
 @workflow_entry_point
 class CustomEnrollmentTaskWorkflow(CourseEnrollmentTableDownstreamMixin, OverwriteOutputMixin, luigi.WrapperTask):
-    """Import all breakdowns of enrollment into MySQL"""
+    """
+    Выгрузка истории зачислений студентов на курсы по дням в базу отчетов
+    """
 
     def requires(self):
         kwargs = {

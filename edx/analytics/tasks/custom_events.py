@@ -47,6 +47,10 @@ class HiveTableDownstreamMixin(WarehouseMixin, EventLogSelectionDownstreamMixin,
 
 
 class ImportAuthUserTask(ImportMysqlToHiveTableTask):
+    """
+    Импорт таблицы auth_user из базы Edx в Hive
+    для возможности сопоставлять id и username студентов
+    """
     @property
     def table_name(self):
         return 'auth_user'
@@ -60,6 +64,11 @@ class ImportAuthUserTask(ImportMysqlToHiveTableTask):
 
 
 class ImportStudentEnrollmentTask(ImportMysqlToHiveTableTask):
+    """
+    Импорт таблицы student_courseenrollment из базы Edx в Hive
+    для получения информации о том, на какой режим прохождения записан студент
+    """
+
     @property
     def table_name(self):
         return 'student_courseenrollment'
@@ -90,6 +99,11 @@ class CustomEventTypeDistributionTask(EventTypeDistributionTask):
 
 
 class ActivityDistributionTask(CustomEventTypeDistributionTask):
+    """
+    Получение событий по активности студентов из tracking.log
+    В итоге получаем количество событий для ключа (user_id, event_date, org_id, course_id, event_type)
+    """
+
     COURSE_NEWS_EVENT_TYPE = "news"
 
     known_events = [
@@ -131,6 +145,9 @@ class ActivityDistributionTask(CustomEventTypeDistributionTask):
 
 
 class ActivityHiveTable(HiveTableDownstreamMixin, HiveTableTask):
+    """
+    Описание Hive таблицы для хранения данных об активности студентов
+    """
     @property
     def table(self):
         return 'activity_log'
@@ -162,6 +179,9 @@ class ActivityHiveTable(HiveTableDownstreamMixin, HiveTableTask):
 
 
 class ActivityDistributionToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryToMysqlTask):
+    """
+    Базовый класс для выгрузки активности из Hive в базу отчетов
+    """
     @property
     def partition(self):
         return HivePartition('dt', self.interval.date_b.isoformat())  # pylint: disable=no-member
@@ -183,6 +203,11 @@ class ActivityDistributionToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryT
 
 
 class ActivityDaily(ActivityDistributionToSQLTaskWorkflow):
+    """
+    Выгрузка активности в базу отчетов.
+    Данные из лога объединяются с данными о username и mode студентов из базы Edx
+    """
+
     @property
     def query(self):
         query = """
@@ -220,6 +245,13 @@ class ActivityDaily(ActivityDistributionToSQLTaskWorkflow):
 
 
 class InvolvementDaily(ActivityDistributionToSQLTaskWorkflow):
+    """
+    Выгрузка вовлеченности в базу отчетов.
+    Отличается от активности только методом агрегирования,
+    поэтому наследуется от базового класса выгрузки активности.
+    Данные из лога объединяются с данными о username и mode студентов из базы Edx
+    """
+
     @property
     def query(self):
         query = """
@@ -254,6 +286,10 @@ class InvolvementDaily(ActivityDistributionToSQLTaskWorkflow):
 
 
 class AnswerDistributionTask(CustomEventTypeDistributionTask):
+    """
+    Получение данных об оценках студентов за обычные задания из tracking.log
+    """
+
     known_events = [
         'problem_check',
     ]
@@ -294,6 +330,10 @@ class AnswerDistributionTask(CustomEventTypeDistributionTask):
 
 
 class AnswerHiveTable(HiveTableDownstreamMixin, HiveTableTask):
+    """
+    Описание Hive таблицы для хранения данных об оценках студентов
+    """
+
     @property
     def table(self):
         return "answer_log"
@@ -327,6 +367,10 @@ class AnswerHiveTable(HiveTableDownstreamMixin, HiveTableTask):
 
 
 class AnswerDistributionToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryToMysqlTask):
+    """
+    Базовый класс для выгрузки данных об оценках студентов из Hive в базу отчетов
+    """
+
     @property
     def partition(self):
         return HivePartition('dt', self.interval.date_b.isoformat())  # pylint: disable=no-member
@@ -349,6 +393,12 @@ class AnswerDistributionToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryToM
 
 
 class AnswerDaily(AnswerDistributionToSQLTaskWorkflow):
+    """
+    Выгрузка данных об оценках студентов из Hive в базу отчетов
+    Данные из лога объединяются с данными о username и mode студентов из базы Edx,
+    а также с данными о структуре курсов из базы Mongo.
+    """
+
     @property
     def query(self):
         query = """
@@ -395,14 +445,23 @@ class AnswerDaily(AnswerDistributionToSQLTaskWorkflow):
 
 
 class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
+    """
+    Получение данных об оценках студентов за задания типа Open Response Assessment.
+    Для справки по методике расчета см. раздел документации Edx:
+    http://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/tracking_logs.html#open-response-assessment-events
+    """
+
     known_events = [
         'openassessmentblock.peer_assess',
         'openassessmentblock.self_assess',
         'openassessmentblock.staff_assess',
     ]
 
+    # оценка выставлена командой курса
     SCORE_TYPE_STAFF = "ST"
+    # оценка выставлена другими студентами
     SCORE_TYPE_PEER = "PE"
+    # оценка выставлена студентом самостоятельно
     SCORE_TYPE_SELF = "SE"
 
     def mapper(self, line):
@@ -451,7 +510,8 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
         values = list(values)
         score_types = {val[1] for val in values}
         filtered_values = []
-        if self.SCORE_TYPE_STAFF in score_types:  # if there are staff assessment use just them
+        # если среди оценок присутствуют оценки команды курса, берем в расчет только их
+        if self.SCORE_TYPE_STAFF in score_types:
             staff_grades = filter(lambda v: v[1] == self.SCORE_TYPE_STAFF, values)
             staff_grades = sorted(staff_grades, key=lambda v: v[0], reverse=True)
             filtered_values = []
@@ -463,8 +523,10 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
                 if event_date != latest_date or scorer_id != latest_scorer:
                     break
                 filtered_values.append(staff_grade)
-        elif self.SCORE_TYPE_PEER in score_types:  # if no staff but peers exist use just them
+        # нет оценок команды курса, но есть оценки других студентов - берем в расчет только их
+        elif self.SCORE_TYPE_PEER in score_types:
             filtered_values = filter(lambda v: v[1] == self.SCORE_TYPE_PEER, values)
+        # остаются только самостоятельные оценки - берем их
         elif self.SCORE_TYPE_SELF in score_types:  # it's just self assessment
             self_grades = filter(lambda v: v[1] == self.SCORE_TYPE_SELF, values)
             self_grades = sorted(self_grades, key=lambda v: v[0], reverse=True)
@@ -474,9 +536,10 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
                 if event_date != latest_date:
                     break
                 filtered_values.append(self_grade)
-        else:
+        else: # не должно случиться
             raise Exception('Unknown score_types: {}'.format(str(score_types)))
-        # getting list of grades by each criterion and max grade by all criterions
+        # получаем список оценок для каждого оцениваемого параметра
+        # и суммарную максимально возможную оценку по всем параметрам
         criterion_grades = {}
         max_grade_sum = 0
         for v in filtered_values:
@@ -488,15 +551,19 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
                 max_grade_sum += max_grade
             else:
                 criterion_grades[criterion_name].append(grade)
-        # getting sum of median values by each criterion
+        # находим медиану для каждого параметра и суммируем
         grade_sum = 0
-        for criterion in criterion_grades.keys():  # count median value by each criterion
+        for criterion in criterion_grades.keys():
             grades = criterion_grades[criterion]
             grade_sum += self.median(grades)
         yield (key), (grade_sum, max_grade_sum)
 
 
 class OpenAssessmentHiveTable(HiveTableDownstreamMixin, HiveTableTask):
+    """
+    Описание Hive таблицы для хранения данных об оценках студентов
+    за задания типа Open Response Assessment.
+    """
     @property
     def table(self):
         return "openassessment_log"
@@ -529,6 +596,12 @@ class OpenAssessmentHiveTable(HiveTableDownstreamMixin, HiveTableTask):
 
 
 class OpenAssessmentToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryToMysqlTask):
+    """
+    Выгрузка оценок студентов за задания типа Open Response Assessment в базу отчетов.
+    Данные из лога объединяются с данными о username и mode студентов из базы Edx,
+    а также с данными о структуре курсов из базы Mongo.
+    """
+
     @property
     def partition(self):
         return HivePartition('dt', self.interval.date_b.isoformat())  # pylint: disable=no-member
