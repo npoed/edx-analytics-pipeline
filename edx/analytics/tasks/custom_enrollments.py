@@ -1,3 +1,4 @@
+# coding=utf-8
 """Compute metrics related to user enrollments in courses"""
 
 import logging

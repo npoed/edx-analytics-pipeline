@@ -1,3 +1,4 @@
+# coding=utf-8
 import re
 import logging
 import luigi
@@ -480,15 +481,22 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
         context = event.get('context', {})
         org_id = context.get('org_id')
         course_id = context.get('course_id')
+        # id студента из auth_user
         user_id = context.get('user_id')
 
         module = context.get('module', {})
+        # ключ вида: block-v1:hse+PRMN+spring_2016+type@openassessment+block@cc3d84bb182443c68dcdd1513c8297d7
         problem_id = module.get('usage_key', '')
         problem_id_parts = re.split("[@/]", problem_id)
+        # id задания - последняя часть ключа: cc3d84bb182443c68dcdd1513c8297d7
         problem_id_last = problem_id_parts[-1]
         event_event = event.get('event', {})
+        # тип оценки ST, PE или SE
         score_type = event_event.get("score_type")
+        # анонимизированный id студента из student_anonymoususerid
         scorer_id = event_event.get("scorer_id")
+
+        # разбиваем составную оценку на множество оценок по параметрам
         parts = event_event.get('parts', [])
         for part in parts:
             criterion = part['criterion']
@@ -507,6 +515,7 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
         return sum(sorted(lst)[quotient - 1:quotient + 1]) / 2.
 
     def reducer(self, key, values):
+        # в values содержатся все оценки по конкретному решению задания
         values = list(values)
         score_types = {val[1] for val in values}
         filtered_values = []
@@ -517,6 +526,8 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
             filtered_values = []
             latest_date = staff_grades[0][0]
             latest_scorer = staff_grades[0][2]
+            # Оценок команды курса может быть много, но они перезаписывают друг друга.
+            # Нам нужна последняя оценка по все параметрам
             for staff_grade in staff_grades:
                 event_date = staff_grade[0]
                 scorer_id = staff_grade[2]
@@ -525,18 +536,21 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
                 filtered_values.append(staff_grade)
         # нет оценок команды курса, но есть оценки других студентов - берем в расчет только их
         elif self.SCORE_TYPE_PEER in score_types:
+            # учитываем все оценки других студентов
             filtered_values = filter(lambda v: v[1] == self.SCORE_TYPE_PEER, values)
         # остаются только самостоятельные оценки - берем их
-        elif self.SCORE_TYPE_SELF in score_types:  # it's just self assessment
+        elif self.SCORE_TYPE_SELF in score_types:
             self_grades = filter(lambda v: v[1] == self.SCORE_TYPE_SELF, values)
             self_grades = sorted(self_grades, key=lambda v: v[0], reverse=True)
+            # Самостоятельных оценок может быть много, но они перезаписывают друг друга.
+            # Нам нужна последняя оценка по все параметрам
             latest_date = self_grades[0][0]
             for self_grade in self_grades:
                 event_date = self_grade[0]
                 if event_date != latest_date:
                     break
                 filtered_values.append(self_grade)
-        else: # не должно случиться
+        else:  # не должно случиться
             raise Exception('Unknown score_types: {}'.format(str(score_types)))
         # получаем список оценок для каждого оцениваемого параметра
         # и суммарную максимально возможную оценку по всем параметрам
