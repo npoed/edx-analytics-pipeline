@@ -495,6 +495,8 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
         score_type = event_event.get("score_type")
         # анонимизированный id студента из student_anonymoususerid
         scorer_id = event_event.get("scorer_id")
+        # уникальный id решения
+        submission_uuid = event_event.get("submission_uuid")
 
         # разбиваем составную оценку на множество оценок по параметрам
         parts = event_event.get('parts', [])
@@ -504,7 +506,7 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
             criterion_name = criterion['name']
             option = part['option']
             grade = option['points']
-            yield (user_id, org_id, course_id, problem_id, problem_id_last), \
+            yield (user_id, org_id, course_id, problem_id, problem_id_last, submission_uuid), \
                   (event_date, score_type, scorer_id, grade, max_grade, criterion_name)
 
     @staticmethod
@@ -590,6 +592,7 @@ class OpenAssessmentHiveTable(HiveTableDownstreamMixin, HiveTableTask):
             ('course_id', 'STRING'),
             ('problem_id', 'STRING'),
             ('problem_id_last', 'STRING'),
+            ('submission_uuid', 'STRING'),
             ('grade', 'DOUBLE'),
             ('max_grade', 'INT'),
         ]
@@ -645,6 +648,7 @@ class OpenAssessmentToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryToMysql
                         oa.course_id,
                         ce.mode,
                         oa.problem_id,
+                        oa.submission_uuid,
                         oa.grade,
                         oa.max_grade,
                         cs.block_id,
@@ -669,6 +673,7 @@ class OpenAssessmentToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryToMysql
             ('course_id', 'VARCHAR(255)'),
             ('mode', 'VARCHAR(255)'),
             ('problem_id', 'VARCHAR(255)'),
+            ('submission_uuid', 'VARCHAR(255)'),
             ('grade', 'DOUBLE'),
             ('max_grade', 'INTEGER'),
             ('block_id', 'VARCHAR(255)'),
