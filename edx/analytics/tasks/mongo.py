@@ -342,7 +342,6 @@ class CourseStructureMongoImportTask(MongoImportTask):
         children = fields.get('children', [])
         root_id = root['block_id']
         order_dict[root_id] = order
-        print("{}: {}, childs {}".format(order, root_id, len(children)))
         order += 1
         for child_type_id in children:
             child_type, child_id = child_type_id
