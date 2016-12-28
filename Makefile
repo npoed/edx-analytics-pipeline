@@ -18,6 +18,7 @@ install: requirements uninstall
 bootstrap: uninstall
 	$(PIP_INSTALL) -U -r requirements/pre.txt
 	$(PIP_INSTALL) -U -r requirements/base.txt
+	$(PIP_INSTALL) -U -r requirements/npoed.txt
 	python setup.py install --force
 
 develop: requirements develop-local
