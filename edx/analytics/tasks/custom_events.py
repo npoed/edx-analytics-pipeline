@@ -93,7 +93,8 @@ class CustomEventTypeDistributionTask(EventTypeDistributionTask):
     def output(self):
         return get_target_from_url(self.output_root)
 
-    reducer = None
+    def reducer(self, key, values):
+        yield (key), (values)
 
 
 # --------------------------------------------------ACTIVITY------------------------------------------------------------
