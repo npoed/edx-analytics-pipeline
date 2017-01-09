@@ -330,6 +330,9 @@ class AnswerDistributionTask(CustomEventTypeDistributionTask):
             return
         yield (user_id, event_date, org_id, course_id, grade, max_grade, problem_id, problem_id_last)
 
+    reducer = NotImplemented
+
+
 
 class AnswerHiveTable(HiveTableDownstreamMixin, HiveTableTask):
     """
