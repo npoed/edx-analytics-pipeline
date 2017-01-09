@@ -122,13 +122,13 @@ class DefinitionsGraderMongoImportTask(MongoImportTask):
         fields = entry['fields']
         grading_policy = fields.get('grading_policy', {})
         graders = grading_policy.get('GRADER', [])
-        for order, grader in enumerate(graders):
+        for grader_order, grader in enumerate(graders):
             min_count = grader.get("min_count")
             weight = grader.get("weight")
             type = grader.get("type")
             drop_count = grader.get("drop_count")
             short_label = grader.get("short_label")
-            result.append((uid, type, short_label, min_count, drop_count, weight, order))
+            result.append((uid, type, short_label, min_count, drop_count, weight, grader_order))
         return result
 
 
@@ -150,7 +150,7 @@ class DefinitionsGraderHiveTable(HiveTableTask):
             ('min_count', 'INT'),
             ('drop_count', 'INT'),
             ('weight', 'DOUBLE'),
-            ('order', 'INT'),
+            ('grader_order', 'INT'),
         ]
 
     @property
@@ -182,7 +182,7 @@ class DefinitionsGraderToSQLTaskWorkflow(HiveQueryToMysqlTask):
 
     @property
     def query(self):
-        query = """SELECT dg.uid, course_def.course_id, dg.format, dg.abbr, dg.min_count, dg.drop_count, dg.weight, dg.order
+        query = """SELECT dg.uid, course_def.course_id, dg.format, dg.abbr, dg.min_count, dg.drop_count, dg.weight, dg.grader_order
                    FROM (
                      SELECT DISTINCT v.course_id, cs.definition_id
                      FROM active_versions v
@@ -206,7 +206,7 @@ class DefinitionsGraderToSQLTaskWorkflow(HiveQueryToMysqlTask):
             ('min_count', 'INTEGER'),
             ('drop_count', 'INTEGER'),
             ('weight', 'DOUBLE'),
-            ('order', 'INTEGER'),
+            ('grader_order', 'INTEGER'),
         ]
 
 
@@ -413,7 +413,7 @@ class CourseStructureHiveTable(HiveTableTask):
             ('format', 'STRING'),
             ('weight', 'DOUBLE'),
             ('definition_id', 'STRING'),
-            ('order', 'INT'),
+            ('block_order', 'INT'),
         ]
 
     @property
@@ -445,7 +445,8 @@ class CourseStructureToSQLTaskWorkflow(HiveQueryToMysqlTask):
 
     @property
     def query(self):
-        query = """SELECT DISTINCT cs.child_id, cs.block_id, cs.branch_id, cs.block_name, cs.format, cs.weight, v.course_id, cs.order
+        query = """SELECT DISTINCT cs.child_id, cs.block_id, cs.branch_id, cs.block_name, cs.format, cs.weight, 
+                                   v.course_id, cs.block_order
                    FROM course_structure cs
                    INNER JOIN active_versions v ON v.published_branch = cs.branch_id
                 """
@@ -465,7 +466,7 @@ class CourseStructureToSQLTaskWorkflow(HiveQueryToMysqlTask):
             ('format', 'VARCHAR(255)'),
             ('weight', 'INTEGER'),
             ('course_id', 'VARCHAR(255)'),
-            ('order', 'INTEGER'),
+            ('block_order', 'INTEGER'),
         ]
 
 
