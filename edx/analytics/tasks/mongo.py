@@ -374,8 +374,13 @@ class CourseStructureMongoImportTask(MongoImportTask):
             for child in children:
                 child_type, child_id = child
                 parent_dict[child_id] = block
-        # нумеруем блоки
+        # нумеруем блоки начиная с root
         order_dict, max_order = self.get_block_ordering(root, block_dict, {})
+        # нумеруем блоки вне основной иерархии
+        for block in blocks:
+            block_id = block['block_id']
+            if block_id not in order_dict:
+                order_dict, max_order = self.get_block_ordering(block, block_dict, order_dict, order=max_order)
         # Ищем блоки типа problem, у которых есть родитель с graded=True
         for block in blocks:
             block_type = block["block_type"]
