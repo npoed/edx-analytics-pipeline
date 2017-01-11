@@ -381,10 +381,10 @@ class CourseStructureMongoImportTask(MongoImportTask):
             block_id = block['block_id']
             if block_id not in order_dict:
                 order_dict, max_order = self.get_block_ordering(block, block_dict, order_dict, order=max_order)
-        # Ищем блоки типа problem, у которых есть родитель с graded=True
+        # Ищем блоки типа problem и openassessment, у которых есть родитель с graded=True
         for block in blocks:
             block_type = block["block_type"]
-            if block_type != "problem":
+            if block_type not in ["problem", "openassessment"]:
                 continue
             block_id = block['block_id']
             parent = self.get_graded_parent(block_id, parent_dict)
