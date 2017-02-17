@@ -425,7 +425,7 @@ class AnswerDaily(AnswerDistributionToSQLTaskWorkflow):
     @property
     def query(self):
         query = """
-                    SELECT
+                    SELECT DISTINCT
                         u.username,
                         a.event_date,
                         a.org_id,
@@ -665,7 +665,7 @@ class OpenAssessmentToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryToMysql
     @property
     def query(self):
         query = """
-                    SELECT
+                    SELECT DISTINCT
                         u.username,
                         oa.org_id,
                         oa.course_id,
