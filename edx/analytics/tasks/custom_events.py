@@ -13,6 +13,7 @@ from edx.analytics.tasks.pathutil import EventLogSelectionDownstreamMixin
 from edx.analytics.tasks.url import get_target_from_url, url_path_join
 import datetime
 
+from edx.analytics.tasks.util import eventlog
 from edx.analytics.tasks.util.hive import WarehouseMixin, HiveTableTask, HivePartition, HiveQueryToMysqlTask
 from edx.analytics.tasks.util.overwrite import OverwriteOutputMixin
 
@@ -96,6 +97,20 @@ class CustomEventTypeDistributionTask(EventTypeDistributionTask):
     def reducer(self, key, values):
         yield (key), (values)
 
+    def get_event(self, line):
+        event = eventlog.parse_json_event(line)
+        if type(event) != dict:
+            return None
+        return event
+
+    def get_event_date_str(self, event):
+        event_time = self.get_event_time(event)
+        if event_time is None:
+            return None
+        event_date_str = event_time.split("T")[0]
+        if event_date_str < self.lower_bound_date_string or event_date_str >= self.upper_bound_date_string:
+            return None
+        return event_date_str
 
 # --------------------------------------------------ACTIVITY------------------------------------------------------------
 
@@ -123,24 +138,26 @@ class ActivityDistributionTask(CustomEventTypeDistributionTask):
     COURSE_NEWS_PATTERN = "/courses/[^/]+/info"
 
     def mapper(self, line):
-        value = self.get_event_and_date_string(line)
-        if value is None:
+        event = self.get_event(line)
+        if event is None:
             return
-        event, event_date = value
+        event_date_str = self.get_event_date_str(event)
+        if event_date_str is None:
+            return
         event_type = event.get('event_type')
         if event_type.startswith('/'):
             if re.match(self.COURSE_NEWS_PATTERN, event_type):
                 event_type = self.COURSE_NEWS_EVENT_TYPE
             else:
                 return
-        if event_type is None or event_date is None or event_type not in self.known_events:
+        if event_type is None or event_type not in self.known_events:
             # Ignore if any of the keys is None
             return
         context = event.get('context', {})
         org_id = context.get('org_id')
         course_id = context.get('course_id')
         user_id = context.get('user_id')
-        yield (user_id, event_date, org_id, course_id, event_type), 1
+        yield (user_id, event_date_str, org_id, course_id, event_type), 1
 
     def reducer(self, key, values):
         yield (key), sum(values)
@@ -297,15 +314,16 @@ class AnswerDistributionTask(CustomEventTypeDistributionTask):
     ]
 
     def mapper(self, line):
-        value = self.get_event_and_date_string(line)
-        if value is None:
+        event = self.get_event(line)
+        if event is None:
             return
-        event, event_date = value
+        event_date_str = self.get_event_date_str(event)
+        if event_date_str is None:
+            return
         event_type = event.get('event_type')
         event_source = event.get('event_source')
 
-        if event_type is None or event_date is None \
-                or event_type not in self.known_events \
+        if event_type is None or event_type not in self.known_events \
                 or event_source is None or event_source != 'server':
             # Ignore if any of the keys is None
             return
@@ -328,7 +346,7 @@ class AnswerDistributionTask(CustomEventTypeDistributionTask):
         if event_type.startswith('/'):
             # Ignore events that begin with a slash
             return
-        yield (user_id, event_date, org_id, course_id, grade, max_grade, problem_id, problem_id_last)
+        yield (user_id, event_date_str, org_id, course_id, grade, max_grade, problem_id, problem_id_last)
 
     reducer = NotImplemented
 
@@ -470,15 +488,16 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
     SCORE_TYPE_SELF = "SE"
 
     def mapper(self, line):
-        value = self.get_event_and_date_string(line)
-        if value is None:
+        event = self.get_event(line)
+        if event is None:
             return
-        event, event_date = value
+        event_date_str = self.get_event_date_str(event)
+        if event_date_str is None:
+            return
         event_type = event.get('event_type')
         event_source = event.get('event_source')
 
-        if event_type is None or event_date is None \
-                or event_type not in self.known_events \
+        if event_type is None or event_type not in self.known_events \
                 or event_source is None or event_source != 'server':
             # Ignore if any of the keys is None
             return
@@ -511,7 +530,7 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
             option = part['option']
             grade = option['points']
             yield (user_id, org_id, course_id, problem_id, problem_id_last, submission_uuid), \
-                  (event_date, score_type, scorer_id, grade, max_grade, criterion_name)
+                  (event_date_str, score_type, scorer_id, grade, max_grade, criterion_name)
 
     @staticmethod
     def median(lst):
