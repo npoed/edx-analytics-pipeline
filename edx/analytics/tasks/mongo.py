@@ -345,7 +345,9 @@ class CourseStructureMongoImportTask(MongoImportTask):
         order += 1
         for child_type_id in children:
             child_type, child_id = child_type_id
-            child = block_dict[child_id]
+            child = block_dict.get(child_id)
+            if child is None:
+                continue
             d, order = self.get_block_ordering(child, block_dict, order_dict, order)
             order_dict.update(d)
         return order_dict, order
