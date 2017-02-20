@@ -524,11 +524,19 @@ class OpenAssessmentDistributionTask(CustomEventTypeDistributionTask):
         # разбиваем составную оценку на множество оценок по параметрам
         parts = event_event.get('parts', [])
         for part in parts:
-            criterion = part['criterion']
-            max_grade = criterion['points_possible']
-            criterion_name = criterion['name']
-            option = part['option']
-            grade = option['points']
+            criterion = part.get('criterion', {})
+            if criterion is None:
+                continue
+            max_grade = criterion.get('points_possible')
+            criterion_name = criterion.get('name')
+            if max_grade is None or criterion_name is None:
+                continue
+            option = part.get('option')
+            if option is None:
+                continue
+            grade = option.get('points')
+            if grade is None:
+                continue
             yield (user_id, org_id, course_id, problem_id, problem_id_last, submission_uuid), \
                   (event_date_str, score_type, scorer_id, grade, max_grade, criterion_name)
 
