@@ -4,23 +4,26 @@ import logging
 import luigi
 import luigi.task
 
-from edx.analytics.tasks.database_imports import ImportMysqlToHiveTableTask
+from edx.analytics.tasks.custom_mixins import OverwriteWorkflowMixin
 from edx.analytics.tasks.decorators import workflow_entry_point
+from edx.analytics.tasks.edx_mysql_import import ImportAuthUserTask, ImportStudentEnrollmentTask
 from edx.analytics.tasks.event_type_dist import EventTypeDistributionTask
 from edx.analytics.tasks.mapreduce import MapReduceJobTaskMixin
 from edx.analytics.tasks.mongo import CourseStructureHiveTable
 from edx.analytics.tasks.pathutil import EventLogSelectionDownstreamMixin
-from edx.analytics.tasks.url import get_target_from_url, url_path_join
+from edx.analytics.tasks.url import get_target_from_url
 import datetime
 
 from edx.analytics.tasks.util import eventlog
 from edx.analytics.tasks.util.hive import WarehouseMixin, HiveTableTask, HivePartition, HiveQueryToMysqlTask
-from edx.analytics.tasks.util.overwrite import OverwriteOutputMixin
 
 log = logging.getLogger(__name__)
 
 
-class HiveTableDownstreamMixin(WarehouseMixin, EventLogSelectionDownstreamMixin, MapReduceJobTaskMixin, OverwriteOutputMixin):
+class HiveTableDownstreamMixin(WarehouseMixin,
+                               EventLogSelectionDownstreamMixin,
+                               MapReduceJobTaskMixin,
+                               OverwriteWorkflowMixin):
     # Make the interval be optional:
     interval = luigi.DateIntervalParameter(
         default=None,
@@ -46,42 +49,6 @@ class HiveTableDownstreamMixin(WarehouseMixin, EventLogSelectionDownstreamMixin,
 
         if not self.interval:
             self.interval = luigi.date_interval.Custom(self.interval_start, self.interval_end)
-
-
-class ImportAuthUserTask(ImportMysqlToHiveTableTask):
-    """
-    Импорт таблицы auth_user из базы Edx в Hive
-    для возможности сопоставлять id и username студентов
-    """
-    @property
-    def table_name(self):
-        return 'auth_user'
-
-    @property
-    def columns(self):
-        return [
-            ('id', 'INT'),
-            ('username', 'STRING'),
-        ]
-
-
-class ImportStudentEnrollmentTask(ImportMysqlToHiveTableTask):
-    """
-    Импорт таблицы student_courseenrollment из базы Edx в Hive
-    для получения информации о том, на какой режим прохождения записан студент
-    """
-
-    @property
-    def table_name(self):
-        return 'student_courseenrollment'
-
-    @property
-    def columns(self):
-        return [
-            ('user_id', 'INT'),
-            ('course_id', 'STRING'),
-            ('mode', 'STRING')
-        ]
 
 
 class CustomEventTypeDistributionTask(EventTypeDistributionTask):
@@ -214,10 +181,11 @@ class ActivityDistributionToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryT
                 source=self.source,
                 interval=self.interval,
                 pattern=self.pattern,
-                warehouse_path=self.warehouse_path
+                warehouse_path=self.warehouse_path,
+                overwrite=self.hive_overwrite
             ),
-            ImportAuthUserTask(),
-            ImportStudentEnrollmentTask()
+            ImportAuthUserTask(overwrite=self.hive_overwrite),
+            ImportStudentEnrollmentTask(overwrite=self.hive_overwrite)
         )
 
 
@@ -274,14 +242,22 @@ class InvolvementDaily(ActivityDistributionToSQLTaskWorkflow):
     @property
     def query(self):
         query = """
-                    SELECT DISTINCT
+                    SELECT
                         u.username,
                         a.event_date,
                         a.org_id,
                         a.course_id,
                         ce.mode,
                         a.event_type
-                    FROM activity_log a
+                    FROM (
+                        SELECT DISTINCT
+                            user_id,
+                            event_date,
+                            org_id,
+                            course_id,
+                            event_type
+                        FROM activity_log
+                    ) a
                     INNER JOIN auth_user u ON u.id = a.user_id
                     INNER JOIN student_courseenrollment ce ON ce.user_id = u.id and ce.course_id = a.course_id
                 """
@@ -351,7 +327,6 @@ class AnswerDistributionTask(CustomEventTypeDistributionTask):
     reducer = NotImplemented
 
 
-
 class AnswerHiveTable(HiveTableDownstreamMixin, HiveTableTask):
     """
     Описание Hive таблицы для хранения данных об оценках студентов
@@ -407,11 +382,13 @@ class AnswerDistributionToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryToM
                 source=self.source,
                 interval=self.interval,
                 pattern=self.pattern,
-                warehouse_path=self.warehouse_path
+                warehouse_path=self.warehouse_path,
+                overwrite=self.hive_overwrite
             ),
-            ImportAuthUserTask(),
-            ImportStudentEnrollmentTask(),
-            CourseStructureHiveTable(warehouse_path=self.warehouse_path)
+            ImportAuthUserTask(overwrite=self.hive_overwrite),
+            ImportStudentEnrollmentTask(overwrite=self.hive_overwrite),
+            CourseStructureHiveTable(warehouse_path=self.warehouse_path,
+                                     overwrite=self.hive_overwrite)
         )
 
 
@@ -663,11 +640,13 @@ class OpenAssessmentToSQLTaskWorkflow(HiveTableDownstreamMixin, HiveQueryToMysql
                 source=self.source,
                 interval=self.interval,
                 pattern=self.pattern,
-                warehouse_path=self.warehouse_path
+                warehouse_path=self.warehouse_path,
+                overwrite=self.hive_overwrite
             ),
-            ImportAuthUserTask(),
-            ImportStudentEnrollmentTask(),
-            CourseStructureHiveTable(warehouse_path=self.warehouse_path)
+            ImportAuthUserTask(overwrite=self.hive_overwrite),
+            ImportStudentEnrollmentTask(overwrite=self.hive_overwrite),
+            CourseStructureHiveTable(warehouse_path=self.warehouse_path,
+                                     overwrite=self.hive_overwrite)
         )
 
     @property
@@ -727,7 +706,9 @@ class ActivityWorkflow(
             'interval': self.interval,
             'pattern': self.pattern,
             'warehouse_path': self.warehouse_path,
-            'overwrite': self.overwrite
+            'overwrite': self.overwrite,
+            'hive_overwrite': self.hive_overwrite,
+            'allow_empty_insert': self.allow_empty_insert,
         }
         yield (
             ActivityDaily(**kwargs),

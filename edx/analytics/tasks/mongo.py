@@ -6,6 +6,7 @@ import logging
 import datetime
 from pymongo import MongoClient
 
+from edx.analytics.tasks.custom_mixins import OverwriteWorkflowMixin
 from edx.analytics.tasks.decorators import workflow_entry_point
 from edx.analytics.tasks.url import url_path_join, get_target_from_url
 from edx.analytics.tasks.util.hive import HiveQueryToMysqlTask, HivePartition, WarehouseMixin, HiveTableTask
@@ -163,7 +164,7 @@ class DefinitionsGraderHiveTable(HiveTableTask):
         )
 
 
-class DefinitionsGraderToSQLTaskWorkflow(HiveQueryToMysqlTask):
+class DefinitionsGraderToSQLTaskWorkflow(OverwriteWorkflowMixin, HiveQueryToMysqlTask):
     """
     Выгрузка данных о политике оценивания прохождения курса студентами в базу отчетов.
     Данные объединяются с active_versions и course_structure
@@ -175,9 +176,9 @@ class DefinitionsGraderToSQLTaskWorkflow(HiveQueryToMysqlTask):
     @property
     def required_table_tasks(self):
         yield (
-            ActiveVersionsHiveTable(warehouse_path=self.warehouse_path),
-            CourseStructureHiveTable(warehouse_path=self.warehouse_path),
-            DefinitionsGraderHiveTable(warehouse_path=self.warehouse_path)
+            ActiveVersionsHiveTable(warehouse_path=self.warehouse_path, overwrite=self.hive_overwrite),
+            CourseStructureHiveTable(warehouse_path=self.warehouse_path, overwrite=self.hive_overwrite),
+            DefinitionsGraderHiveTable(warehouse_path=self.warehouse_path, overwrite=self.hive_overwrite)
         )
 
     @property
@@ -257,7 +258,7 @@ class DefinitionsCutoffsHiveTable(HiveTableTask):
         )
 
 
-class DefinitionsCutoffToSQLTaskWorkflow(HiveQueryToMysqlTask):
+class DefinitionsCutoffToSQLTaskWorkflow(OverwriteWorkflowMixin, HiveQueryToMysqlTask):
     """
     Выгрузка доступных оценок за курс в базу отчетов.
     Данные объединяются с active_versions и course_structure
@@ -270,9 +271,9 @@ class DefinitionsCutoffToSQLTaskWorkflow(HiveQueryToMysqlTask):
     @property
     def required_table_tasks(self):
         yield (
-            ActiveVersionsHiveTable(warehouse_path=self.warehouse_path),
-            CourseStructureHiveTable(warehouse_path=self.warehouse_path),
-            DefinitionsCutoffsHiveTable(warehouse_path=self.warehouse_path)
+            ActiveVersionsHiveTable(warehouse_path=self.warehouse_path, overwrite=self.hive_overwrite),
+            CourseStructureHiveTable(warehouse_path=self.warehouse_path, overwrite=self.hive_overwrite),
+            DefinitionsCutoffsHiveTable(warehouse_path=self.warehouse_path, overwrite=self.hive_overwrite)
         )
 
     @property
@@ -433,7 +434,7 @@ class CourseStructureHiveTable(HiveTableTask):
         )
 
 
-class CourseStructureToSQLTaskWorkflow(HiveQueryToMysqlTask):
+class CourseStructureToSQLTaskWorkflow(OverwriteWorkflowMixin, HiveQueryToMysqlTask):
     """
     Выгрузка структуры курсов в базу отчетов.
     Данные объединяются с active_versions,
@@ -446,8 +447,8 @@ class CourseStructureToSQLTaskWorkflow(HiveQueryToMysqlTask):
     @property
     def required_table_tasks(self):
         yield (
-            ActiveVersionsHiveTable(warehouse_path=self.warehouse_path),
-            CourseStructureHiveTable(warehouse_path=self.warehouse_path)
+            ActiveVersionsHiveTable(warehouse_path=self.warehouse_path, overwrite=self.hive_overwrite),
+            CourseStructureHiveTable(warehouse_path=self.warehouse_path, overwrite=self.hive_overwrite)
         )
 
     @property
@@ -481,12 +482,14 @@ class CourseStructureToSQLTaskWorkflow(HiveQueryToMysqlTask):
 
 
 @workflow_entry_point
-class MongoImportTaskWorkflow(WarehouseMixin, OverwriteOutputMixin, luigi.WrapperTask):
+class MongoImportTaskWorkflow(WarehouseMixin, OverwriteWorkflowMixin, luigi.WrapperTask):
 
     def requires(self):
         kwargs = {
             'warehouse_path': self.warehouse_path,
-            'overwrite': self.overwrite
+            'overwrite': self.overwrite,
+            'hive_overwrite': self.hive_overwrite,
+            'allow_empty_insert': self.allow_empty_insert,
         }
         yield (
             CourseStructureToSQLTaskWorkflow(**kwargs),

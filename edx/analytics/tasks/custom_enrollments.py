@@ -6,13 +6,13 @@ import datetime
 
 import luigi.task
 
-from edx.analytics.tasks.database_imports import ImportMysqlToHiveTableTask
+from edx.analytics.tasks.custom_mixins import OverwriteWorkflowMixin
+from edx.analytics.tasks.edx_mysql_import import ImportAuthUserTask
 from edx.analytics.tasks.enrollments import CourseEnrollmentTask, DaysEnrolledForEvents, \
     CourseEnrollmentTableDownstreamMixin
 from edx.analytics.tasks.util import eventlog
 from edx.analytics.tasks.util.hive import HiveTableTask, HivePartition, HiveQueryToMysqlTask
 from edx.analytics.tasks.decorators import workflow_entry_point
-from edx.analytics.tasks.util.overwrite import OverwriteOutputMixin
 
 log = logging.getLogger(__name__)
 
@@ -79,20 +79,7 @@ class CourseEnrollmentTableTask(CourseEnrollmentTableDownstreamMixin, HiveTableT
         )
 
 
-class ImportAuthUserTask(ImportMysqlToHiveTableTask):
-    @property
-    def table_name(self):
-        return 'auth_user'
-
-    @property
-    def columns(self):
-        return [
-            ('id', 'INT'),
-            ('username', 'STRING'),
-        ]
-
-
-class EnrollmentTask(CourseEnrollmentTableDownstreamMixin, HiveQueryToMysqlTask):
+class EnrollmentTask(OverwriteWorkflowMixin, CourseEnrollmentTableDownstreamMixin, HiveQueryToMysqlTask):
     """Base class for breakdowns of enrollments"""
 
     @property
@@ -118,8 +105,9 @@ class EnrollmentTask(CourseEnrollmentTableDownstreamMixin, HiveQueryToMysqlTask)
                 interval=self.interval,
                 pattern=self.pattern,
                 warehouse_path=self.warehouse_path,
+                overwrite=self.hive_overwrite
             ),
-            ImportAuthUserTask()
+            ImportAuthUserTask(overwrite=self.hive_overwrite)
         )
 
     @property
@@ -165,7 +153,7 @@ class EnrollmentDailyTask(EnrollmentTask):
 
 
 @workflow_entry_point
-class CustomEnrollmentTaskWorkflow(CourseEnrollmentTableDownstreamMixin, OverwriteOutputMixin, luigi.WrapperTask):
+class CustomEnrollmentTaskWorkflow(OverwriteWorkflowMixin, CourseEnrollmentTableDownstreamMixin, luigi.WrapperTask):
     """
     Выгрузка истории зачислений студентов на курсы по дням в базу отчетов
     """
@@ -177,7 +165,9 @@ class CustomEnrollmentTaskWorkflow(CourseEnrollmentTableDownstreamMixin, Overwri
             'interval': self.interval,
             'pattern': self.pattern,
             'warehouse_path': self.warehouse_path,
-            'overwrite': self.overwrite
+            'overwrite': self.overwrite,
+            'hive_overwrite': self.hive_overwrite,
+            'allow_empty_insert': self.allow_empty_insert,
         }
         yield (
             EnrollmentDailyTask(**kwargs),

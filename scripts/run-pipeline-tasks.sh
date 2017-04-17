@@ -9,7 +9,8 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/edx/ap
 
 /edx/app/hadoop/hadoop/bin/hadoop fs -rm -r hdfs://127.0.0.1:9000/edx-analytics-pipeline/warehouse/*
 hive -hiveconf PREV_DATE=$PREV_DATE -f /edx/app/pipeline/edx-analytics-pipeline/scripts/clear.hql
+hive -hiveconf PREV_DATE=$CUR_DATE -f /edx/app/pipeline/edx-analytics-pipeline/scripts/clear.hql
 
-/edx/app/pipeline/pipeline/bin/launch-task ActivityWorkflow --local-scheduler --n-reduce-tasks 4 --interval $PREV_DATE-$CUR_DATE --overwrite
-/edx/app/pipeline/pipeline/bin/launch-task CustomEnrollmentTaskWorkflow --local-scheduler --n-reduce-tasks 4 --interval $PREV_DATE-$CUR_DATE --overwrite
-/edx/app/pipeline/pipeline/bin/launch-task MongoImportTaskWorkflow --local-scheduler --overwrite
+/edx/app/pipeline/pipeline/bin/launch-task ActivityWorkflow --local-scheduler --n-reduce-tasks 4 --interval $PREV_DATE-$CUR_DATE --overwrite --allow-empty-insert
+/edx/app/pipeline/pipeline/bin/launch-task CustomEnrollmentTaskWorkflow --local-scheduler --n-reduce-tasks 4 --interval $PREV_DATE-$CUR_DATE --overwrite --allow-empty-insert
+/edx/app/pipeline/pipeline/bin/launch-task MongoImportTaskWorkflow --local-scheduler --overwrite --allow-empty-insert
