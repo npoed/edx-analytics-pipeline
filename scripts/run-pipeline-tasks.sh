@@ -1,5 +1,7 @@
 #!/bin/bash
 
+. /edx/app/hadoop/hadoop-2.3.0/hadoop_env
+
 PREV_DATE=`date --date="1 days ago" +"%Y-%m-%d"`
 CUR_DATE=`date +"%Y-%m-%d"`
 
